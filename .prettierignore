@@ -3,3 +3,4 @@ dist
 lib
 *.json
 *.yml
+*.yaml

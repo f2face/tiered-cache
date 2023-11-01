@@ -6,14 +6,15 @@ export class RedisCache implements Cache {
         private readonly redisInstance: Redis,
         private readonly cacheKey: string,
         private readonly cacheTtl: number,
-        private readonly autoRenew: boolean = false
+        private readonly resetTtl: boolean = false
     ) {}
 
     public async get() {
         const data = await this.redisInstance.getBuffer(this.cacheKey);
 
-        if (data && this.autoRenew)
+        if (data && this.resetTtl) {
             await this.redisInstance.expire(this.cacheKey, this.cacheTtl);
+        }
 
         return data;
     }

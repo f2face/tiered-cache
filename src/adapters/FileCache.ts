@@ -7,10 +7,7 @@ export class FileCache implements Cache {
 
     protected async fileExists(filePath: PathLike) {
         try {
-            await access(
-                filePath,
-                constants.F_OK | constants.R_OK | constants.W_OK
-            );
+            await access(filePath, constants.F_OK | constants.R_OK | constants.W_OK);
             return true;
         } catch {
             return false;
@@ -18,8 +15,7 @@ export class FileCache implements Cache {
     }
 
     public async get() {
-        if (await this.fileExists(this.filePath))
-            return await readFile(this.filePath);
+        if (await this.fileExists(this.filePath)) return await readFile(this.filePath);
         else return null;
     }
 
