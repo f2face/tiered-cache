@@ -2,6 +2,8 @@
 
 ## Example
 
+> You will need `ioredis` package to use `adapters.RedisCache`.
+
 ```javascript
 import { TieredCache, adapters } from 'tiered-cache';
 import { Redis } from 'ioredis';
@@ -12,13 +14,15 @@ import { Redis } from 'ioredis';
     const redisCacheTtl = 60;
     const redisCacheResetTtl = true; // This will reset cache TTL every time it is retrieved. (Default: false)
 
-    const data = await new TieredCache()
+    const cache = new TieredCache()
         .appendTier(new adapters.RedisCache(redisInstance, redisCacheKey, redisCacheTtl, redisCacheResetTtl)) // 1st tier
         .appendTier(new adapters.FileCache('./cache-file.txt')) // 2nd tier
-        .execute(() => {
+        .setPrimaryDataSource(() => {
             // Primary data source
             return Buffer.from('Lorem ipsum dolor sit amet');
         });
+
+    const data = await cache.get();
 
     console.log(data?.toString());
 
