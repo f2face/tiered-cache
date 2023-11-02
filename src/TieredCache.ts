@@ -1,12 +1,19 @@
 import { Cache } from './adapters/Cache';
 
+export enum TierStatus {
+    UNTOUCHED = 'untouched',
+    HIT = 'hit',
+    MISS = 'miss',
+}
+
 /**
  * Represents a tiered cache that allows storing and retrieving data through multiple cache tiers.
  * @class
  */
-export class TieredCache {
-    private tiers: Map<string, Cache> = new Map();
-    private primaryDataSource?: () => Buffer | Promise<Buffer>;
+export class TieredCache<T extends Buffer | string> {
+    private tiers: Map<string, Cache<T>> = new Map();
+    private origin?: () => T | Promise<T>;
+    private tierStatus: Map<string, TierStatus> = new Map();
 
     /**
      * Creates a new tiered cache.
@@ -27,7 +34,7 @@ export class TieredCache {
      * @method
      * @param label - Tier label.
      */
-    public getTier(label: string): Cache | undefined {
+    public getTier(label: string): Cache<T> | undefined {
         return this.tiers.get(label);
     }
 
@@ -37,7 +44,7 @@ export class TieredCache {
      * @param cache - The cache adapter instance.
      * @returns `TieredCache` instance.
      */
-    public appendTier(cache: Cache): TieredCache;
+    public appendTier(cache: Cache<T>): TieredCache<T>;
 
     /**
      * Appends a cache tier to the tiered cache using a provided label and cache adapter implementation.
@@ -47,9 +54,9 @@ export class TieredCache {
      * @param cache - The cache adapter instance.
      * @returns `TieredCache` instance.
      */
-    public appendTier(label: string, cache: Cache): TieredCache;
+    public appendTier(label: string, cache: Cache<T>): TieredCache<T>;
 
-    public appendTier(arg0: string | Cache, arg1?: Cache): TieredCache {
+    public appendTier(arg0: string | Cache<T>, arg1?: Cache<T>): TieredCache<T> {
         if (typeof arg0 === 'string' && arg1) {
             if (this.tiers.has(arg0)) {
                 throw new Error(`Cache tier label already exists: ${arg0}`);
@@ -59,32 +66,41 @@ export class TieredCache {
             return this;
         }
 
-        return this.appendTier(this.tiers.size.toString(), arg0 as Cache);
+        return this.appendTier(this.tiers.size.toString(), arg0 as Cache<T>);
     }
 
     private async getTiered(
         tierKeyIterator: IterableIterator<string>,
         currentTierKey: string,
-        fn: () => Buffer | Promise<Buffer>
-    ): Promise<Buffer | null> {
+        fn: () => T | Promise<T>,
+        withStatus: boolean
+    ): Promise<T | null> {
         const cache = this.tiers.get(currentTierKey);
         const cacheData = await cache?.get();
 
         if (!cacheData) {
+            if (withStatus) {
+                this.tierStatus.set(currentTierKey, TierStatus.MISS);
+            }
+
             const nextKey = tierKeyIterator.next().value;
 
             if (!nextKey) {
                 const result = await Promise.resolve(fn());
-                if (result) await cache?.set(result);
-                return result;
+                if (result) await cache?.set(result as T);
+                return result as T;
             }
 
-            const result = await this.getTiered(tierKeyIterator, nextKey, fn);
-            if (result) await cache?.set(result);
+            const result = await this.getTiered(tierKeyIterator, nextKey, fn, withStatus);
+            if (result) await cache?.set(result as T);
             return result;
         }
 
-        return cacheData;
+        if (withStatus) {
+            this.tierStatus.set(currentTierKey, TierStatus.HIT);
+        }
+
+        return cacheData as T;
     }
 
     /**
@@ -93,13 +109,13 @@ export class TieredCache {
      * @param fn - The function that retrieves data from the primary source if the data is not found in any cache tier.
      * @returns `TieredCache` instance.
      */
-    public setPrimaryDataSource(fn: () => Buffer | Promise<Buffer>) {
-        this.primaryDataSource = fn;
+    public setOrigin(fn: () => T | Promise<T>) {
+        this.origin = fn;
         return this;
     }
 
-    private async _get() {
-        if (!this.primaryDataSource) {
+    private async _get(withStatus = false) {
+        if (!this.origin) {
             throw new Error('Primary data source must be set.');
         }
 
@@ -108,18 +124,27 @@ export class TieredCache {
         }
 
         const tierKeyIterator = this.tiers.keys();
-        return await this.getTiered(tierKeyIterator, tierKeyIterator.next().value, this.primaryDataSource);
+
+        if (withStatus) {
+            this.tierStatus = new Map([...this.tiers.keys()].map((tierKey) => [tierKey, TierStatus.UNTOUCHED]));
+        }
+
+        return await this.getTiered(tierKeyIterator, tierKeyIterator.next().value, this.origin, withStatus);
     }
 
     /**
-     * Retrieves data from the cache.
-     * If the data is not found in any cache tier, the provided function in `setPrimaryDataSource` will be invoked,
-     * and the result is stored in the higher-tier cache(s).
+     * Retrieves data from the cache, from the lower-tier to the upper-tier.
+     * If the data is not available in any cache tier, the provided function in `setOrigin` will be invoked
+     * and the result will be stored in all lower-tier caches.
      * @async
      * @method
      * @returns A Promise that resolves to the retrieved data as a Buffer.
      */
     public async get() {
         return await this._get();
+    }
+
+    public async getWithStatus(): Promise<[T | null, Map<string, TierStatus>]> {
+        return [await this._get(true), this.tierStatus];
     }
 }

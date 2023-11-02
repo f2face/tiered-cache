@@ -2,7 +2,7 @@ import type { PathLike } from 'fs';
 import { access, constants, readFile, writeFile } from 'fs/promises';
 import { Cache } from './Cache';
 
-export class FileCache implements Cache {
+export class FileCache implements Cache<Buffer> {
     constructor(private readonly filePath: PathLike) {}
 
     protected async fileExists(filePath: PathLike) {

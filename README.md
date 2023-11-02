@@ -15,9 +15,9 @@ import { Redis } from 'ioredis';
     const redisCacheResetTtl = true; // This will reset cache TTL every time it is retrieved. (Default: false)
 
     const cache = new TieredCache()
-        .appendTier(new adapters.RedisCache(redisInstance, redisCacheKey, redisCacheTtl, redisCacheResetTtl)) // 1st tier
-        .appendTier(new adapters.FileCache('./cache-file.txt')) // 2nd tier
-        .setPrimaryDataSource(() => {
+        .appendTier(new adapters.RedisCache(redisInstance, redisCacheKey, redisCacheTtl, redisCacheResetTtl)) // 1st tier (lower-tier)
+        .appendTier(new adapters.FileCache('./cache-file.txt')) // 2nd tier (upper-tier)
+        .setOrigin(() => {
             // Primary data source
             return Buffer.from('Lorem ipsum dolor sit amet');
         });
@@ -28,4 +28,31 @@ import { Redis } from 'ioredis';
 
     await redisInstance.quit();
 })();
+```
+
+## Custom adapter
+
+This library includes built-in `FileCache` and `RedisCache` adapters.
+
+If you need to work with a different type of cache, you can create your own custom adapter by implementing the `Cache` interface with `get` and `set` methods.
+
+```javascript
+const cache = new TieredCache()
+    .appendTier({
+        // Custom adapter
+        get: async () => {
+            // Retrieve data from the database.
+        },
+        set: async (data) => {
+            // Store data into the database.
+        },
+    })
+    .setOrigin(() => {
+        // Primary data source
+        return 'Lorem ipsum dolor sit amet';
+    });
+
+const data = await cache.get();
+
+console.log(data);
 ```

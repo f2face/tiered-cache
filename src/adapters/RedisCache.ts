@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis';
 import { Cache } from './Cache';
 
-export class RedisCache implements Cache {
+export class RedisCache implements Cache<Buffer> {
     constructor(
         private readonly redisInstance: Redis,
         private readonly cacheKey: string,
