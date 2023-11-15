@@ -12,10 +12,18 @@ import { Redis } from 'ioredis';
     const redisInstance = new Redis('redis://localhost:6379');
     const redisCacheKey = 'test:cache1';
     const redisCacheTtl = 60;
-    const redisCacheResetTtl = true; // This will reset cache TTL every time it is retrieved. (Default: false)
+    const redisCacheResetTtl = true; // This will reset cache TTL every time the cached data is retrieved. (Default: false)
 
     const cache = new TieredCache()
-        .appendTier(new adapters.RedisCache(redisInstance, redisCacheKey, redisCacheTtl, redisCacheResetTtl)) // 1st tier (lower-tier)
+        .appendTier(
+            // 1st tier (lower-tier)
+            new adapters.RedisCache({
+                redis: redisInstance,
+                cacheKey: redisCacheKey,
+                cacheTtl: redisCacheTtl,
+                resetTtl: redisCacheResetTtl,
+            })
+        )
         .appendTier(new adapters.FileCache('./cache-file.txt')) // 2nd tier (upper-tier)
         .setOrigin(() => {
             // Primary data source
